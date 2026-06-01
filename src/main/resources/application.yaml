@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: payguard-engine
+
+  # 1. Cấu hình kết nối MySQL Database
+  datasource:
+    url: jdbc:mysql://localhost:3307/payguard_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # Cấu hình Hibernate / JPA
+  jpa:
+    hibernate:
+      ddl-auto: update # Tự động tạo bảng dựa trên Entity Java
+    show-sql: true # In câu lệnh SQL ra console để dễ debug
+    properties:
+      hibernate:
+        format_sql: true
+
+  # 2. Cấu hình kết nối Redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # 3. Kích hoạt Virtual Threads (Java 21) để tối ưu hóa hiệu năng đồng thời
+  threads:
+    virtual:
+      enabled: true
+
+  # 4. Tắt tự động chạy Spring Batch khi startup (chúng ta sẽ kích hoạt bằng tay/cronjob)
+  batch:
+    job:
+      enabled: false
+
+server:
+  port: 8080

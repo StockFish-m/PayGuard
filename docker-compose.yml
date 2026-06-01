@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  payguard-mysql:
+    image: mysql:8.0
+    container_name: payguard-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: payguard_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  payguard-redis:
+    image: redis:7.0-alpine
+    container_name: payguard-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql_data:
