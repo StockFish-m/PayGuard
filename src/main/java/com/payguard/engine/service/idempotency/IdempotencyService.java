@@ -55,4 +55,27 @@ public class IdempotencyService {
             throw new RuntimeException("Giao dịch của bạn đang được xử lý, vui lòng không ấn lại!");
         }
     }
+
+  /**
+     * Lưu kết quả xử lý thành công cuối cùng để thay thế giá trị khóa tạm thời.
+     * * @param key Chuỗi duy nhất định danh request (Idempotency-Key)
+     * @param responseBody Chuỗi dữ liệu JSON kết quả trả về từ hệ thống
+     */
+    public void saveResult(String key, String responseBody) {
+        // Ghi đè kết quả thực tế vào key và giữ lại trong 15 phút để làm cache kết quả
+        redisTemplate.opsForValue().set(key, responseBody, Duration.ofMinutes(15));
+        
+        log.info("==> [Idempotency] Cập nhật kết quả thành công cho key: {}", key);
+    }
+
+    /**
+     * Xóa bỏ khóa tạm thời khi tiến trình xử lý request xảy ra lỗi/sự cố.
+     * * @param key Chuỗi duy nhất định danh request cần giải phóng
+     */
+    public void removeLock(String key) {
+        // Xóa khóa ngay lập tức để giải phóng người gác cổng, cho phép khách hàng bấm thử lại
+        redisTemplate.delete(key);
+        
+        log.warn("==> [Idempotency] Đã giải phóng khóa (Evict Lock) do request lỗi cho key: {}", key);
+    }
 }
