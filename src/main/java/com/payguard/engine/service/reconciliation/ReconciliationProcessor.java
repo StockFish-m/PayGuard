@@ -15,7 +15,7 @@ public class ReconciliationProcessor {
         // KICH BAN C: Khop hoan toan.
         if ("SUCCESS".equals(dbStatus) && payOsAmount == dbAmount) {
             log.info(
-                    "==> [Doi soat] Don hang {} khop hoan toan. status={}, payOSAmount={}, dbAmount={}. Bo qua.",
+                    "==> [Reconciliation] Order {} matched completely. status={}, payOSAmount={}, dbAmount={}. Skipping.",
                     orderCode, dbStatus, payOsAmount, dbAmount);
             return;
         }
@@ -23,7 +23,7 @@ public class ReconciliationProcessor {
         // KICH BAN D: Can cap nhat don hang thanh SUCCESS va gui ve cho khach.
         if (("PENDING".equals(dbStatus) || "FAILED".equals(dbStatus)) && payOsAmount == dbAmount) {
             log.warn(
-                    "==> [Doi soat] Don hang {} can cap nhat thanh SUCCESS va gui ve cho khach. currentStatus={}, payOSAmount={}, dbAmount={}.",
+                    "==> [Reconciliation] Order {} needs to be updated to SUCCESS and sent to client. currentStatus={}, payOSAmount={}, dbAmount={}.",
                     orderCode, dbStatus, payOsAmount, dbAmount);
             return;
         }
@@ -33,13 +33,13 @@ public class ReconciliationProcessor {
             long delta = payOsAmount - dbAmount;
 
             log.warn(
-                    "==> [Doi soat] Don hang {} can dieu tra thu cong vi so tien khong khop. status={}, payOSAmount={}, dbAmount={}, delta={}.",
+                    "==> [Reconciliation] Order {} needs manual investigation due to mismatched amount. status={}, payOSAmount={}, dbAmount={}, delta={}.",
                     orderCode, dbStatus, payOsAmount, dbAmount, delta);
             return;
         }
 
         log.warn(
-                "==> [Doi soat] Don hang {} co amount khop nhung status khong ho tro hoac bi thieu. status={}, payOSAmount={}, dbAmount={}.",
+                "==> [Reconciliation] Order {} has matching amount but unsupported or missing status. status={}, payOSAmount={}, dbAmount={}.",
                 orderCode, dbStatus, payOsAmount, dbAmount);
     }
 }

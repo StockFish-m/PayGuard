@@ -43,12 +43,12 @@ public class IdempotencyService {
 
         if (success) {
             // Trường hợp TRUE: Bạn là người đến đầu tiên
-            log.info("==> [Idempotency] Khóa thành công! Khởi tạo tiến trình xử lý cho key: {}", key);
+            log.info("==> [Idempotency] Lock acquired successfully! Initializing processing for key: {}", key);
             return true;
         } else {
             // Trường hợp FALSE: Key đã tồn tại trên Redis, chứng tỏ đang bị click đúp hoặc
             // spam
-            log.warn("==> [Idempotency] Phát hiện Request trùng lặp! Chặn đứng key: {}", key);
+            log.warn("==> [Idempotency] Duplicate request detected! Blocked key: {}", key);
 
             // Ném ra ngoại lệ để Spring Boot tự động chặn đứng luồng chạy và báo về cho
             // khách hàng
@@ -65,7 +65,7 @@ public class IdempotencyService {
         // Ghi đè kết quả thực tế vào key và giữ lại trong 15 phút để làm cache kết quả
         redisTemplate.opsForValue().set(key, responseBody, Duration.ofMinutes(15));
         
-        log.info("==> [Idempotency] Cập nhật kết quả thành công cho key: {}", key);
+        log.info("==> [Idempotency] Result updated successfully for key: {}", key);
     }
 
     /**
@@ -76,6 +76,6 @@ public class IdempotencyService {
         // Xóa khóa ngay lập tức để giải phóng người gác cổng, cho phép khách hàng bấm thử lại
         redisTemplate.delete(key);
         
-        log.warn("==> [Idempotency] Đã giải phóng khóa (Evict Lock) do request lỗi cho key: {}", key);
+        log.warn("==> [Idempotency] Lock released (Evict Lock) due to request error for key: {}", key);
     }
 }

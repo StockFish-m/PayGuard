@@ -1,0 +1,11 @@
+package com.payguard.engine.repository;
+
+import com.payguard.engine.entity.Transaction;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface TransactionRepository extends JpaRepository<Transaction, String> {
+    // JpaRepository đã có sẵn các hàm findById(orderCode) và save(transaction) rồi
+    // nhé!
+}
