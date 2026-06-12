@@ -1,81 +1,68 @@
 package com.payguard.engine.service.idempotency;
 
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
-
-import java.time.Duration;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.springframework.stereotype.Service;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class IdempotencyService {
 
-    // Tạo Logger để ghi log hệ thống chuẩn SE (không dùng System.out.println)
     private static final Logger log = LoggerFactory.getLogger(IdempotencyService.class);
+    private final RedissonClient redissonClient;
 
-    private final StringRedisTemplate redisTemplate;
-
-    // Dependency Injection thông qua Constructor
-    public IdempotencyService(StringRedisTemplate redisTemplate) {
-        this.redisTemplate = redisTemplate;
+    public IdempotencyService(RedissonClient redissonClient) {
+        this.redissonClient = redissonClient;
     }
 
     /**
-     * Kiểm tra chốt chặn Idempotency bằng Redis
+     * Thử xử lý request một cách an toàn bằng Khóa phân tán
      * 
-     * @param key Chuỗi duy nhất gửi từ Header (ví dụ: REQ-GODFATHER-999)
-     * @return true nếu đây là request đầu tiên và hợp lệ
-     * @throws RuntimeException nếu request bị trùng lặp
+     * @return true nếu xử lý hợp lệ (không trùng), false nếu là request trùng lặp
+     *         bị chặn lại
      */
-    public boolean validateRequest(String key) {
-        // Khóa sẽ tự động biến mất sau 15 phút để giải phóng bộ nhớ RAM cho Redis
-        Duration timeout = Duration.ofMinutes(15);
+    public boolean tryProcessRequest(String idempotencyKey) {
+        // Tạo một cái khóa dựa trên mã định danh duy nhất của request
+        String lockKey = "lock:idempotency:" + idempotencyKey;
+        RLock lock = redissonClient.getLock(lockKey);
 
-        // Thực hiện hành động Nguyên tử (Atomic Operation): Kiểm tra và đặt khóa cùng
-        // một lúc
-        Boolean isFirstRequest = redisTemplate.opsForValue()
-                .setIfAbsent(key, "IN_PROGRESS", timeout);
+        try {
+            /*
+             * Cố gắng giật khóa (Distributed Lock):
+             * - waitTime = 0: Nếu có thằng khác đang giữ khóa này rồi, tôi KHÔNG CHỜ ĐỢI,
+             * báo thất bại luôn (chặn trùng ngay lập tức).
+             * - leaseTime = 10: Nếu tôi lấy được khóa, tôi sẽ giữ nó trong tối đa 10 giây.
+             * Sau 10 giây khóa tự nhả (tránh nghẽn mạch hệ thống).
+             */
+            boolean isLockAcquired = lock.tryLock(0, 10, TimeUnit.SECONDS);
 
-        // Chuyển đổi an toàn từ Boolean object sang primitive boolean để tránh
-        // NullPointerException
-        boolean success = (isFirstRequest != null && isFirstRequest);
+            if (!isLockAcquired) {
+                // Request trùng lặp đến cùng lúc không lấy được khóa -> Bị từ chối thẳng mặt
+                log.warn("==> [Idempotency] Detected concurrent DUPLICATE request for key: {}. Blocked!",
+                        idempotencyKey);
+                return false;
+            }
 
-        if (success) {
-            // Trường hợp TRUE: Bạn là người đến đầu tiên
-            log.info("==> [Idempotency] Lock acquired successfully! Initializing processing for key: {}", key);
+            log.info("==> [Idempotency] Lock acquired SUCCESSFULLY for key: {}. Starting business logic...", idempotencyKey);
+
+            // Giả lập thời gian xử lý thanh toán thực tế tốn 2 giây (để dễ test
+            // concurrency)
+            Thread.sleep(2000);
+
             return true;
-        } else {
-            // Trường hợp FALSE: Key đã tồn tại trên Redis, chứng tỏ đang bị click đúp hoặc
-            // spam
-            log.warn("==> [Idempotency] Duplicate request detected! Blocked key: {}", key);
 
-            // Ném ra ngoại lệ để Spring Boot tự động chặn đứng luồng chạy và báo về cho
-            // khách hàng
-            throw new RuntimeException("Giao dịch của bạn đang được xử lý, vui lòng không ấn lại!");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            // Xử lý xong xuôi thì phải giải phóng (nhả) khóa ra cho các request hợp lệ tiếp
+            // theo
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+                log.info("==> [Idempotency] Released lock safely for key: {}", idempotencyKey);
+            }
         }
-    }
-
-  /**
-     * Lưu kết quả xử lý thành công cuối cùng để thay thế giá trị khóa tạm thời.
-     * * @param key Chuỗi duy nhất định danh request (Idempotency-Key)
-     * @param responseBody Chuỗi dữ liệu JSON kết quả trả về từ hệ thống
-     */
-    public void saveResult(String key, String responseBody) {
-        // Ghi đè kết quả thực tế vào key và giữ lại trong 15 phút để làm cache kết quả
-        redisTemplate.opsForValue().set(key, responseBody, Duration.ofMinutes(15));
-        
-        log.info("==> [Idempotency] Result updated successfully for key: {}", key);
-    }
-
-    /**
-     * Xóa bỏ khóa tạm thời khi tiến trình xử lý request xảy ra lỗi/sự cố.
-     * * @param key Chuỗi duy nhất định danh request cần giải phóng
-     */
-    public void removeLock(String key) {
-        // Xóa khóa ngay lập tức để giải phóng người gác cổng, cho phép khách hàng bấm thử lại
-        redisTemplate.delete(key);
-        
-        log.warn("==> [Idempotency] Lock released (Evict Lock) due to request error for key: {}", key);
     }
 }

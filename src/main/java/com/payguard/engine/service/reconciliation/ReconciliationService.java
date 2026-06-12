@@ -26,7 +26,7 @@ public class ReconciliationService {
     }
 
     public void runReconciliation() {
-        log.info("==> [Doi soat] Bat dau tien trinh doi soat chu dong voi payOS...");
+        log.info("==> [Reconciliation] Starting active reconciliation process with payOS...");
 
         // BƯỚC 1: Gọi qua API của payOS để lấy dữ liệu (Tạm thời giữ giả lập payOS để
         // xử lý xong DB trước)
@@ -42,7 +42,7 @@ public class ReconciliationService {
 
             if (dbTransactionOpt.isEmpty()) {
                 // Kịch bản A: Không tìm thấy mã đơn này dưới DB của mình
-                log.error("==> [Doi soat] Don hang {} KHONG TON TAI trong Database! Can canh bao.", orderCode);
+                log.error("==> [Reconciliation] Order {} DOES NOT EXIST in Database! Action required.", orderCode);
                 continue; // Bỏ qua dòng này, đi check dòng tiếp theo
             }
 
@@ -55,7 +55,7 @@ public class ReconciliationService {
             reconciliationProcessor.processRow(orderCode, payOsAmount, dbStatus, dbAmount);
         }
 
-        log.info("==> [Doi soat] Tien trinh doi soat hoan tat.");
+        log.info("==> [Reconciliation] Reconciliation process completed.");
     }
 
     // --- Giữ lại hàm giả lập payOS tạm thời, các hàm giả lập DB cũ đã bị XÓA BỎ
