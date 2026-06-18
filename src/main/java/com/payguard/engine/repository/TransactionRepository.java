@@ -6,6 +6,4 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, String> {
-    // JpaRepository đã có sẵn các hàm findById(orderCode) và save(transaction) rồi
-    // nhé!
 }

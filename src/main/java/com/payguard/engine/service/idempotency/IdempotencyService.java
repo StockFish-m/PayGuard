@@ -45,7 +45,8 @@ public class IdempotencyService {
                 return false;
             }
 
-            log.info("==> [Idempotency] Lock acquired SUCCESSFULLY for key: {}. Starting business logic...", idempotencyKey);
+            log.info("==> [Idempotency] Lock acquired SUCCESSFULLY for key: {}. Starting business logic...",
+                    idempotencyKey);
 
             // Giả lập thời gian xử lý thanh toán thực tế tốn 2 giây (để dễ test
             // concurrency)
