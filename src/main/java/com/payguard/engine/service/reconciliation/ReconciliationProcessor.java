@@ -21,7 +21,8 @@ public class ReconciliationProcessor {
     public void processRow(String orderCode, long payOsAmount, String dbStatus, long dbAmount) {
         // KỊCH BẢN C: Khớp hoàn toàn
         if ("SUCCESS".equals(dbStatus) && payOsAmount == dbAmount) {
-            log.info("==> [Reconciliation] Order {} is fully matched. status={}, payOSAmount={}, dbAmount={}. Skipping.",
+            log.info(
+                    "==> [Reconciliation] Order {} is fully matched. status={}, payOSAmount={}, dbAmount={}. Skipping.",
                     orderCode, dbStatus, payOsAmount, dbAmount);
             return;
         }
@@ -57,7 +58,8 @@ public class ReconciliationProcessor {
             if (txn != null) {
                 txn.setStatus("AMOUNT_MISMATCH");
                 transactionRepository.save(txn);
-                log.warn("==> [Reconciliation] CHANGED status of order {} to AMOUNT_MISMATCH for accountant processing.",
+                log.warn(
+                        "==> [Reconciliation] CHANGED status of order {} to AMOUNT_MISMATCH for accountant processing.",
                         orderCode);
             }
             return;
