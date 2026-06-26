@@ -40,3 +40,10 @@ server:
 logging:
   charset:
     console: UTF-8
+
+payOS:
+  base-url: "http://localhost:8080" # Đây là URL thật của hệ thống payOS
+  client-id: ${PAYOS_CLIENT_ID:your_mock_client_id_here}
+  api-key: ${PAYOS_API_KEY:your_mock_api_key_here}
+  
+  

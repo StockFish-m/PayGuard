@@ -57,7 +57,8 @@ public class ReconciliationService {
             // dụng Cách A)
             for (PayOsTransactionDTO payOsTxn : payOsTransactions) {
                 // Ép kiểu an toàn từ Long của DTO sang String khóa chính của DB bạn
-                String orderCode = String.valueOf(payOsTxn.getOrderCode());
+                // String orderCode = String.valueOf(payOsTxn.getOrderCode());
+                String orderCode = "TXN-00" + String.valueOf(payOsTxn.getOrderCode());
                 long payOsAmount = payOsTxn.getAmount();
 
                 // 3. ĐỌC DỮ LIỆU THẬT TỪ DATABASE MYSQL
@@ -79,7 +80,6 @@ public class ReconciliationService {
             }
 
             log.info("==> [Reconciliation] Reconciliation process completed.");
-
         } catch (Exception e) {
             log.error("==> [Reconciliation] Critical error during internet connectivity with payOS: ", e);
         }

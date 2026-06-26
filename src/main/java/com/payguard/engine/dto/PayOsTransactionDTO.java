@@ -1,16 +1,16 @@
 package com.payguard.engine.dto;
 
 public class PayOsTransactionDTO {
-    private String orderCode;
+    private Long orderCode;
     private Long amount;
     private String status;
     private String description;
 
-    public String getOrderCode() {
+    public Long getOrderCode() {
         return orderCode;
     }
 
-    public void setOrderCode(String orderCode) {
+    public void setOrderCode(Long orderCode) {
         this.orderCode = orderCode;
     }
 
