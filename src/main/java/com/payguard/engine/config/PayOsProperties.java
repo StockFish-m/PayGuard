@@ -10,6 +10,7 @@ public class PayOsProperties {
     private String baseUrl;
     private String clientId;
     private String apiKey;
+    private String checksumKey;
 
     // --- BẮT BUỘC PHẢI CÓ GETTER VÀ SETTER ĐỂ SPRING BOOT ĐỔ DỮ LIỆU VÀO ---
     public String getBaseUrl() {
@@ -34,5 +35,13 @@ public class PayOsProperties {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getChecksumKey() {
+        return checksumKey;
+    }
+
+    public void setChecksumKey(String checksumKey) {
+        this.checksumKey = checksumKey;
     }
 }
