@@ -47,3 +47,7 @@ payOS:
   api-key: ${PAYOS_API_KEY:1cf920b0-8b30-4041-bf43-a93ea832eac9}
   #checksum-key: ${PAYOS_CHECKSUM_KEY:ccb26840c6003d730108c785dd9715f7c9a2edaf57307d55c9059a53cfb5d06c}
   checksum-key: ${PAYOS_CHECKSUM_KEY:abc}
+
+payguard:
+  downstream:
+    webhook-url: ${PAYGUARD_DOWNSTREAM_WEBHOOK_URL:http://localhost:8081/webhook}

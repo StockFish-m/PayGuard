@@ -1,7 +1,12 @@
 package com.payguard.engine.service.reconciliation;
 
+import com.payguard.engine.entity.OutboxEvent;
 import com.payguard.engine.entity.Transaction;
+import com.payguard.engine.event.OutboxWakeupEvent;
+import com.payguard.engine.repository.OutboxEventRepository;
 import com.payguard.engine.repository.TransactionRepository;
+import jakarta.transaction.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -13,11 +18,17 @@ public class ReconciliationProcessor {
 
     // 1. Tiêm Repository vào bộ não để xử lý lưu trữ
     private final TransactionRepository transactionRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public ReconciliationProcessor(TransactionRepository transactionRepository) {
+    public ReconciliationProcessor(TransactionRepository transactionRepository,
+            OutboxEventRepository outboxEventRepository, ApplicationEventPublisher eventPublisher) {
         this.transactionRepository = transactionRepository;
+        this.outboxEventRepository = outboxEventRepository;
+        this.eventPublisher = eventPublisher;
     }
 
+    @Transactional
     public void processRow(String orderCode, long payOsAmount, String dbStatus, long dbAmount) {
         // KỊCH BẢN C: Khớp hoàn toàn
         if ("SUCCESS".equals(dbStatus) && payOsAmount == dbAmount) {
@@ -38,10 +49,24 @@ public class ReconciliationProcessor {
             if (txn != null) {
                 txn.setStatus("SUCCESS");
                 transactionRepository.save(txn); // Ghi đè trạng thái mới xuống DB
-                log.info("==> [Reconciliation] AUTOMATICALLY UPDATED order {} to SUCCESS in Database!", orderCode);
 
-                // 💡 Gợi ý tương lai: Đây chính là nơi bạn sẽ gọi sang EmailService để bắn vé
-                // xem phim cho khách!
+                // Lưu vào bảng Outbox để hệ thống sau xử lý tiếp
+
+                OutboxEvent event = new OutboxEvent();
+                event.setAggregateType("TRANSACTION");
+                event.setAggregateId(orderCode);
+                event.setEventType("PAYMENT_SUCCESS");
+                event.setPayload(String.format("{\"orderCode\":\"%s\",\"amount\":%d,\"status\":\"SUCCESS\"}", orderCode,
+                        payOsAmount));
+                // Lưu xuống DB
+                OutboxEvent savedEvent = outboxEventRepository.save(event);
+
+                // PHÁT THANH: Báo cho Worker biết có đơn mới!
+                // Luôn tạo ra savedEvent để thao tác, không thao tác trên event.
+                eventPublisher.publishEvent(new OutboxWakeupEvent(savedEvent.getId()));
+                log.info(
+                        "==> [Reconciliation] UPDATED order {} to SUCCESS in Database and saved to Outbox!",
+                        orderCode);
             }
             return;
         }
@@ -58,8 +83,22 @@ public class ReconciliationProcessor {
             if (txn != null) {
                 txn.setStatus("AMOUNT_MISMATCH");
                 transactionRepository.save(txn);
+
+                OutboxEvent event = new OutboxEvent();
+                event.setAggregateType("TRANSACTION");
+                event.setAggregateId(orderCode);
+                event.setEventType("PAYMENT_AMOUNT_MISMATCH");
+                event.setPayload(String.format("{\"orderCode\":\"%s\",\"amount\":%d,\"status\":\"AMOUNT_MISMATCH\"}",
+                        orderCode, payOsAmount));
+
+                // Lưu xuống DB
+                OutboxEvent savedEvent = outboxEventRepository.save(event);
+
+                // PHÁT THANH: Báo cho Worker biết có đơn mới!
+                // Luôn tạo ra savedEvent để thao tác, không thao tác trên event.
+                eventPublisher.publishEvent(new OutboxWakeupEvent(savedEvent.getId()));
                 log.warn(
-                        "==> [Reconciliation] CHANGED status of order {} to AMOUNT_MISMATCH for accountant processing.",
+                        "==> [Reconciliation] CHANGED status of order {} to AMOUNT_MISMATCH and saved to Outbox for accountant processing.",
                         orderCode);
             }
             return;
