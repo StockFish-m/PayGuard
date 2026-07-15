@@ -56,12 +56,12 @@ public class OutboxRelayWorker {
 
                 // 3a. PHA 3 (Thành công): Chốt sổ
                 processor.markAsProcessed(event.getId());
-                log.info("✅ Đã relay thành công sự kiện ID: {}", event.getId());
+                log.info("Đã relay thành công sự kiện ID: {}", event.getId());
 
             } catch (Exception e) {
                 // 3b. PHA 3 (Thất bại): Bóc tách lỗi chí mạng và phán xử Retry
                 String errorMessage = extractErrorMessage(e);
-                log.warn("❌ Relay thất bại sự kiện ID: {}. Nguyên nhân: {}", event.getId(), errorMessage);
+                log.warn("Relay thất bại sự kiện ID: {}. Nguyên nhân: {}", event.getId(), errorMessage);
 
                 processor.markAsFailed(event.getId(), errorMessage);
             }
