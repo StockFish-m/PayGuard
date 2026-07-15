@@ -21,7 +21,7 @@ public class OutboxRelayWorker {
     private final OutboxProcessor processor;
     private final RestClient restClient;
 
-    @Value("${downstream.webhook-url}")
+    @Value("${payguard.downstream.webhook-url:http://localhost:8081/webhook}")
     private String webhookUrl;
 
     public OutboxRelayWorker(OutboxProcessor processor, RestClient outboxRestClient) {
