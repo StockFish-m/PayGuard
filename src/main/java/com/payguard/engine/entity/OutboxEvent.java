@@ -9,14 +9,9 @@ import lombok.Data;
 @Entity
 // 🚀 TỐI ƯU HIỆU NĂNG: Đánh Index cho cột status để truy vấn siêu tốc độ, không
 // bị quét toàn bảng
-// @Table(name = "outbox_events", indexes = {
-// @Index(name = "idx_outbox_status", columnList = "status"),
-// @Index(name = "idx_outbox_next_retry", columnList = "nextRetryAt")
-// })
-
 @Table(name = "outbox_events", indexes = {
         // Gộp 2 cột vào 1 Composite Index duy nhất:
-        @Index(name = "idx_outbox_status_next_retry", columnList = "status, nextRetryAt")
+        @Index(name = "idx_outbox_status_next_retry", columnList = "status, next_retry_at")
 })
 public class OutboxEvent {
 

@@ -13,8 +13,9 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
     // Thread khác giữ
     @Query(value = """
             SELECT * FROM outbox_events
-            WHERE (status = 'PENDING' OR status = 'FAILED')
+            WHERE status IN ('PENDING', 'FAILED')
               AND (next_retry_at <= :now OR next_retry_at IS NULL)
+            ORDER BY created_at ASC
             LIMIT 100
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
