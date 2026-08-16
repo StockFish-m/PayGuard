@@ -23,8 +23,8 @@ public class ExponentialBackoffPolicy implements RetryPolicy {
 
     @Override
     public long calculateNextDelaySeconds(int retryCount) {
-        if (retryCount <= 0) {
-            return 5; // Lần đầu tiên lỗi sẽ thử lại sau khoảng 5 giây cơ bản
+        if (retryCount <= 1) {
+            return 5; // Lần đầu tiên lỗi (retryCount = 1) sẽ thử lại sau 5 giây cơ bản
         }
 
         // 1. Tính toán thời gian chờ cơ sở theo hàm mũ: 5^retryCount
@@ -40,8 +40,7 @@ public class ExponentialBackoffPolicy implements RetryPolicy {
 
     @Override
     public boolean shouldRetry(int currentRetryCount) {
-        // Nếu số lần lỗi đã đạt tới ngưỡng 6, hệ thống sẽ trả về false để đánh dấu
-        // trạng thái DEAD
-        return currentRetryCount < MAX_RETRIES;
+        // Cho phép thử lại tối đa 6 lần (khi retryCount <= 6)
+        return currentRetryCount <= MAX_RETRIES;
     }
 }

@@ -57,16 +57,16 @@ public class OutboxProcessor {
     @Transactional
     public void markAsFailed(Long eventId, String errorMessage) {
         repository.findById(eventId).ifPresent(event -> {
-            int currentRetries = event.getRetryCount();
+            int nextRetryCount = event.getRetryCount() + 1;
             event.setLastError(errorMessage);
 
             // LẤY ĐÚNG CHÍNH SÁCH DỰA TRÊN LOẠI SỰ KIỆN
             RetryPolicy policy = policyFactory.getPolicy(event.getEventType());
 
-            if (policy.shouldRetry(currentRetries)) {
-                long delay = policy.calculateNextDelaySeconds(currentRetries);
+            if (policy.shouldRetry(nextRetryCount)) {
+                long delay = policy.calculateNextDelaySeconds(nextRetryCount);
                 event.setStatus("FAILED");
-                event.setRetryCount(currentRetries + 1);
+                event.setRetryCount(nextRetryCount);
                 event.setNextRetryAt(LocalDateTime.now().plusSeconds(delay));
             } else {
                 event.setStatus("DEAD");
