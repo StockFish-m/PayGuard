@@ -3,6 +3,7 @@ package com.payguard.engine.service.reconciliation;
 import com.payguard.engine.dto.PayOsResponseDTO;
 import com.payguard.engine.dto.PayOsTransactionDTO;
 import com.payguard.engine.entity.Transaction;
+import com.payguard.engine.enums.TransactionStatus;
 import com.payguard.engine.repository.TransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,7 +73,7 @@ public class ReconciliationService {
 
                 // Nếu tìm thấy, bốc dữ liệu thật ra
                 Transaction dbTxn = dbTransactionOpt.get();
-                String dbStatus = dbTxn.getStatus();
+                TransactionStatus dbStatus = dbTxn.getStatus();
                 long dbAmount = dbTxn.getAmount();
 
                 // 4. Gọi bộ não xử lý đối soát riêng biệt của bạn - Giữ nguyên không đổi

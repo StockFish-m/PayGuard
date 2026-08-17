@@ -40,7 +40,7 @@ public class WebhookController {
 
     @PostMapping("/webhook")
     public ResponseEntity<String> receivePayOsWebhook(@RequestBody String requestBody) {
-        log.info("==> [Webhook] Nhan duoc thong bao thanh toan thoi gian thuc!");
+        log.info("==> [Webhook] Received real-time payment notification!");
 
         try {
             JsonNode rootNode = objectMapper.readTree(requestBody);
@@ -51,7 +51,7 @@ public class WebhookController {
             boolean isSafe = securityService.verifyWebhookSignature(dataNode, signatureFromPayOs);
 
             if (!isSafe) {
-                log.warn("==> [Security Alert] 🚨 CHU KY GIA MAO! Tu choi cap nhat DB.");
+                log.warn("==> [Security Alert] 🚨 INVALID SIGNATURE! Rejecting DB update.");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Signature");
             }
 
@@ -64,18 +64,18 @@ public class WebhookController {
             Optional<Transaction> dbTxnOpt = transactionRepository.findById(dbOrderCode);
             if (dbTxnOpt.isPresent()) {
                 Transaction dbTxn = dbTxnOpt.get();
-                log.info("==> [Webhook] Chu ky chuan xac! Chuyen don {} sang Processor xu ly...", dbOrderCode);
+                log.info("==> [Webhook] Valid signature! Passing order {} to Processor for handling...", dbOrderCode);
 
                 // Mượn sức mạnh của bộ não để ghi đè trạng thái SUCCESS xuống DB
                 reconciliationProcessor.processRow(dbOrderCode, payOsAmount, dbTxn.getStatus(), dbTxn.getAmount());
             } else {
-                log.error("==> [Webhook] Nhan duoc tien nhung ma don {} khong ton tai trong DB!", dbOrderCode);
+                log.error("==> [Webhook] Payment received but order {} does not exist in Database!", dbOrderCode);
             }
 
             return ResponseEntity.ok("success");
 
         } catch (Exception e) {
-            log.error("==> [Webhook] Loi he thong khi xu ly goi tin: ", e);
+            log.error("==> [Webhook] System error while processing payload: ", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Bad Request");
         }
     }

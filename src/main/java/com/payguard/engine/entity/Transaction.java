@@ -1,6 +1,9 @@
 package com.payguard.engine.entity;
 
+import com.payguard.engine.enums.TransactionStatus;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -11,13 +14,15 @@ public class Transaction {
     @Id
     private String orderCode; // Mã đơn hàng (Ví dụ: TXN-001)
     private Long amount; // Số tiền hệ thống ghi nhận
-    private String status; // Trạng thái (PENDING, SUCCESS, FAILED)
+
+    @Enumerated(EnumType.STRING)
+    private TransactionStatus status; // Trạng thái (PENDING, SUCCESS, FAILED, AMOUNT_MISMATCH)
 
     // --- Constructor trống bắt buộc cho JPA ---
     public Transaction() {
     }
 
-    public Transaction(String orderCode, Long amount, String status) {
+    public Transaction(String orderCode, Long amount, TransactionStatus status) {
         this.orderCode = orderCode;
         this.amount = amount;
         this.status = status;
@@ -40,11 +45,11 @@ public class Transaction {
         this.amount = amount;
     }
 
-    public String getStatus() {
+    public TransactionStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(TransactionStatus status) {
         this.status = status;
     }
 }

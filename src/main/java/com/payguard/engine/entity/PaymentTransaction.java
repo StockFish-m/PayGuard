@@ -1,5 +1,6 @@
 package com.payguard.engine.entity;
 
+import com.payguard.engine.enums.TransactionStatus;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -31,8 +32,9 @@ public class PaymentTransaction {
     private BigDecimal amount;
 
     // Trạng thái giao dịch: PENDING, SUCCESS, FAILED
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
-    private String status;
+    private TransactionStatus status;
 
     // Lưu trữ toàn bộ JSON response từ Gateway để trả về ngay cho client nếu bị
     // trùng request

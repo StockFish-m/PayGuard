@@ -26,7 +26,7 @@ public class ReconciliationController {
         // Kích hoạt đường ống dẫn dữ liệu chạy ngầm
         reconciliationService.runReconciliation();
 
-        return ResponseEntity.ok("Tiến trình đối soát đã được kích hoạt thành công! Hãy kiểm tra log trong IDE.");
+        return ResponseEntity.ok("Reconciliation process triggered successfully! Please check IDE logs.");
     }
 
 }

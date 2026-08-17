@@ -2,6 +2,7 @@ package com.payguard.engine.service.reconciliation;
 
 import com.payguard.engine.entity.OutboxEvent;
 import com.payguard.engine.entity.Transaction;
+import com.payguard.engine.enums.TransactionStatus;
 import com.payguard.engine.event.OutboxWakeupEvent;
 import com.payguard.engine.repository.OutboxEventRepository;
 import com.payguard.engine.repository.TransactionRepository;
@@ -29,9 +30,9 @@ public class ReconciliationProcessor {
     }
 
     @Transactional
-    public void processRow(String orderCode, long payOsAmount, String dbStatus, long dbAmount) {
+    public void processRow(String orderCode, long payOsAmount, TransactionStatus dbStatus, long dbAmount) {
         // KỊCH BẢN C: Khớp hoàn toàn
-        if ("SUCCESS".equals(dbStatus) && payOsAmount == dbAmount) {
+        if (dbStatus == TransactionStatus.SUCCESS && payOsAmount == dbAmount) {
             log.info(
                     "==> [Reconciliation] Order {} is fully matched. status={}, payOSAmount={}, dbAmount={}. Skipping.",
                     orderCode, dbStatus, payOsAmount, dbAmount);
@@ -39,7 +40,7 @@ public class ReconciliationProcessor {
         }
 
         // KỊCH BẢN D: Cần cập nhật đơn hàng thành SUCCESS (Cứu đơn rớt mạng cho khách)
-        if (("PENDING".equals(dbStatus) || "FAILED".equals(dbStatus)) && payOsAmount == dbAmount) {
+        if ((dbStatus == TransactionStatus.PENDING || dbStatus == TransactionStatus.FAILED) && payOsAmount == dbAmount) {
             log.warn(
                     "==> [Reconciliation] Order {} needs to be updated to SUCCESS. currentStatus={}, payOSAmount={}, dbAmount={}.",
                     orderCode, dbStatus, payOsAmount, dbAmount);
@@ -47,7 +48,7 @@ public class ReconciliationProcessor {
             // 2. HÀNH ĐỘNG THỰC TẾ: Cập nhật dữ liệu sống xuống MySQL
             Transaction txn = transactionRepository.findById(orderCode).orElse(null);
             if (txn != null) {
-                txn.setStatus("SUCCESS");
+                txn.setStatus(TransactionStatus.SUCCESS);
                 transactionRepository.save(txn); // Ghi đè trạng thái mới xuống DB
 
                 // Lưu vào bảng Outbox để hệ thống sau xử lý tiếp
@@ -56,8 +57,8 @@ public class ReconciliationProcessor {
                 event.setAggregateType("TRANSACTION");
                 event.setAggregateId(orderCode);
                 event.setEventType("PAYMENT_SUCCESS");
-                event.setPayload(String.format("{\"orderCode\":\"%s\",\"amount\":%d,\"status\":\"SUCCESS\"}", orderCode,
-                        payOsAmount));
+                event.setPayload(String.format("{\"orderCode\":\"%s\",\"amount\":%d,\"status\":\"%s\"}", orderCode,
+                        payOsAmount, TransactionStatus.SUCCESS.name()));
                 // Lưu xuống DB
                 OutboxEvent savedEvent = outboxEventRepository.save(event);
 
@@ -81,15 +82,15 @@ public class ReconciliationProcessor {
             // 3. HÀNH ĐỘNG THỰC TẾ: Đổi trạng thái thành lệch tiền để Admin xử lý sau
             Transaction txn = transactionRepository.findById(orderCode).orElse(null);
             if (txn != null) {
-                txn.setStatus("AMOUNT_MISMATCH");
+                txn.setStatus(TransactionStatus.AMOUNT_MISMATCH);
                 transactionRepository.save(txn);
 
                 OutboxEvent event = new OutboxEvent();
                 event.setAggregateType("TRANSACTION");
                 event.setAggregateId(orderCode);
                 event.setEventType("PAYMENT_AMOUNT_MISMATCH");
-                event.setPayload(String.format("{\"orderCode\":\"%s\",\"amount\":%d,\"status\":\"AMOUNT_MISMATCH\"}",
-                        orderCode, payOsAmount));
+                event.setPayload(String.format("{\"orderCode\":\"%s\",\"amount\":%d,\"status\":\"%s\"}",
+                        orderCode, payOsAmount, TransactionStatus.AMOUNT_MISMATCH.name()));
 
                 // Lưu xuống DB
                 OutboxEvent savedEvent = outboxEventRepository.save(event);

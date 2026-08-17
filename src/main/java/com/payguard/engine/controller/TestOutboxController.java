@@ -1,6 +1,7 @@
 package com.payguard.engine.controller;
 
 import com.payguard.engine.entity.OutboxEvent;
+import com.payguard.engine.enums.OutboxStatus;
 import com.payguard.engine.repository.OutboxEventRepository;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,17 +22,17 @@ public class TestOutboxController {
     public String triggerEvent() {
         OutboxEvent event = new OutboxEvent();
         event.setAggregateType("PAYMENT");
-        event.setAggregateId(UUID.randomUUID().toString()); // Giả lập ID hóa đơn
+        event.setAggregateId(UUID.randomUUID().toString());
         event.setEventType("PAYMENT_SUCCESS");
         // Gói hàng JSON gửi đi
         event.setPayload("{\"orderId\": \"12345\", \"amount\": 100000, \"status\": \"SUCCESS\"}");
-        event.setStatus("PENDING");
+        event.setStatus(OutboxStatus.PENDING);
         event.setCreatedAt(LocalDateTime.now());
         event.setNextRetryAt(LocalDateTime.now()); // Sẵn sàng chạy ngay lập tức
         event.setRetryCount(0);
 
-        repository.save(event); // Cất vào kho
+        repository.save(event);
 
-        return "Đã ném 1 Event vào Database thành công! Hãy xem Log của Worker.";
+        return "Successfully created 1 Outbox Event in Database! Please check Worker logs.";
     }
 }

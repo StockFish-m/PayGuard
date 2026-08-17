@@ -34,7 +34,7 @@ public class PayOsSecurityService {
         try {
             String checksumKey = payOsProperties.getChecksumKey();
             if (checksumKey == null || checksumKey.isEmpty()) {
-                log.error("==> [Security] LOI: Chua cau hinh PAYOS_CHECKSUM_KEY trong file .yml");
+                log.error("==> [Security] ERROR: PAYOS_CHECKSUM_KEY is not configured in properties");
                 return false;
             }
 
@@ -58,7 +58,7 @@ public class PayOsSecurityService {
             String dataToHash = stringBuilder.toString();
             log.info("==> [Security] Chuoi tho da sap xep chuan payOS: {}", dataToHash);
 
-            // --- BƯỚC 2: BĂM DỮ LIỆU (HMAC-SHA256) ---
+            // --- STEP 2: HASH DATA (HMAC-SHA256) ---
             Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
             SecretKeySpec secret_key = new SecretKeySpec(checksumKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
             sha256_HMAC.init(secret_key);
@@ -74,11 +74,11 @@ public class PayOsSecurityService {
             }
             String generatedSignature = hexString.toString();
 
-            // --- BƯỚC 3: PHÁN QUYẾT ---
+            // --- STEP 3: VERIFY SIGNATURE ---
             return generatedSignature.equals(signatureFromPayOs);
 
         } catch (Exception e) {
-            log.error("==> [Security] Loi nghiem trong khi giai ma chu ky: ", e);
+            log.error("==> [Security] Critical error while verifying signature: ", e);
             return false;
         }
     }

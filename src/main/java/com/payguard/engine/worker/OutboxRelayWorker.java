@@ -38,30 +38,25 @@ public class OutboxRelayWorker {
             return;
         }
 
-        log.info("Bắt đầu relay {} sự kiện Outbox sang Downstream...", events.size());
+        log.info("Starting relay of {} Outbox events to Downstream...", events.size());
 
-        // 2. PHA 2 (Nguy hiểm): Gọi mạng Internet (Lúc này DB Connection đã được giải
-        // phóng hoàn toàn)
         for (OutboxEvent event : events) {
             try {
                 restClient.post()
                         .uri(webhookUrl)
                         .header("Content-Type", "application/json")
-                        .header("X-Event-ID", String.valueOf(event.getId())) // Header hỗ trợ đối tác chống trùng lặp
-                                                                             // (Idempotency)
+                        .header("X-Event-ID", String.valueOf(event.getId()))
                         .header("X-Event-Type", event.getEventType())
                         .body(event.getPayload())
                         .retrieve()
-                        .toBodilessEntity(); // Chỉ cần biết HTTP 2xx thành công, không cần parse body
+                        .toBodilessEntity();
 
-                // 3a. PHA 3 (Thành công): Chốt sổ
                 processor.markAsProcessed(event.getId());
-                log.info("Đã relay thành công sự kiện ID: {}", event.getId());
+                log.info("Successfully relayed event ID: {}", event.getId());
 
             } catch (Exception e) {
-                // 3b. PHA 3 (Thất bại): Bóc tách lỗi chí mạng và phán xử Retry
                 String errorMessage = extractErrorMessage(e);
-                log.warn("Relay thất bại sự kiện ID: {}. Nguyên nhân: {}", event.getId(), errorMessage);
+                log.warn("Failed to relay event ID: {}. Cause: {}", event.getId(), errorMessage);
 
                 processor.markAsFailed(event.getId(), errorMessage);
             }

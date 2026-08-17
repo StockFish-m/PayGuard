@@ -1,5 +1,6 @@
 package com.payguard.engine.entity;
 
+import com.payguard.engine.enums.OutboxStatus;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -20,41 +21,41 @@ public class OutboxEvent {
     private Long id;
 
     @Column(nullable = false, length = 50)
-    private String aggregateType; // Ví dụ: "TRANSACTION"
+    private String aggregateType; // e.g. "TRANSACTION"
 
     @Column(nullable = false, length = 50)
-    private String aggregateId; // Ví dụ: "TXN-004"
+    private String aggregateId; // e.g. "TXN-004"
 
     @Column(nullable = false, length = 100)
-    private String eventType; // Ví dụ: "PAYMENT_SUCCESS"
+    private String eventType; // e.g. "PAYMENT_SUCCESS"
 
-    // 🚀 TỐI ƯU LƯU TRỮ: Mở rộng khoang chứa JSON
     @Column(columnDefinition = "TEXT", nullable = false)
     private String payload;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String status; // PENDING, PROCESSING, PROCESSED, FAILED, DEAD
+    private OutboxStatus status; // PENDING, PROCESSING, PROCESSED, FAILED, DEAD
 
     @Column(nullable = false)
-    private int retryCount = 0; // Đếm số lần thử lại
+    private int retryCount = 0;
 
     @Column(columnDefinition = "TEXT")
-    private String lastError; // Lưu lý do lỗi để dễ debug
+    private String lastError;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    private LocalDateTime processingAt; // Đánh dấu lúc Worker nhấc lên xử lý
+    private LocalDateTime processingAt;
 
-    private LocalDateTime nextRetryAt; // Hẹn giờ thử lại nếu lỗi
+    private LocalDateTime nextRetryAt;
 
-    private LocalDateTime processedAt; // Đánh dấu lúc hoàn thành
+    private LocalDateTime processedAt;
 
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         if (this.status == null) {
-            this.status = "PENDING";
+            this.status = OutboxStatus.PENDING;
         }
     }
 
