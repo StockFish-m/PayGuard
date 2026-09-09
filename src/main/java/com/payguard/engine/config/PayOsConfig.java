@@ -1,39 +1,32 @@
 package com.payguard.engine.config;
 
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
+import org.springframework.web.client.RestClient;
+
+import java.time.Duration;
 
 @EnableScheduling
 @Configuration
 public class PayOsConfig {
 
-    /**
-     * Đúc ra con WebClient đặc chủng dành riêng cho payOS
-     * Spring Boot sẽ tự động tìm và nạp 'PayOsProperties' vào tham số dưới đây
-     */
     @Bean
-    public WebClient payOsWebClient(PayOsProperties properties) {
-        return WebClient.builder()
-                .baseUrl(properties.getBaseUrl()) // Nạp Base URL từ file .yml
-                .filter(autoAddPayOsHeaders(properties)) // Cắm bộ lọc tự động chèn Header vào đây
-                .build();
-    }
+    public RestClient payOsRestClient(PayOsProperties properties) {
+        HttpClientSettings settings = HttpClientSettings.defaults()
+                .withConnectTimeout(Duration.ofSeconds(5))
+                .withReadTimeout(Duration.ofSeconds(10));
 
-    /**
-     * Bộ lọc (Filter) tự động giật lấy Request chiều đi và đập thêm 2 cái Header bí
-     * mật vào
-     */
-    private ExchangeFilterFunction autoAddPayOsHeaders(PayOsProperties properties) {
-        return ExchangeFilterFunction.ofRequestProcessor(clientRequest -> {
-            return Mono.just(
-                    org.springframework.web.reactive.function.client.ClientRequest.from(clientRequest)
-                            .header("x-client-id", properties.getClientId()) // Tự động điền Client ID
-                            .header("x-api-key", properties.getApiKey()) // Tự động điền API Key
-                            .build());
-        });
+        ClientHttpRequestFactory requestFactory = ClientHttpRequestFactoryBuilder.jdk().build(settings);
+
+        return RestClient.builder()
+                .baseUrl(properties.getBaseUrl())
+                .defaultHeader("x-client-id", properties.getClientId())
+                .defaultHeader("x-api-key", properties.getApiKey())
+                .requestFactory(requestFactory)
+                .build();
     }
 }

@@ -14,6 +14,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.TreeMap;
 
+/**
+ * @deprecated Logic has been migrated to {@link com.payguard.engine.provider.impl.PayOsPaymentProvider}.
+ */
+@Deprecated
 @Service
 public class PayOsSecurityService {
 
