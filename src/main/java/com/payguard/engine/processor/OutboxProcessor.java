@@ -18,11 +18,15 @@ public class OutboxProcessor {
     private final OutboxEventRepository repository;
     private final RetryPolicyFactory policyFactory;
 
+    // Tiêm Repository và Chính sách thử lại vào đây
     public OutboxProcessor(OutboxEventRepository repository, RetryPolicyFactory policyFactory) {
         this.repository = repository;
         this.policyFactory = policyFactory;
     }
 
+    /**
+     * PHA 1: Khóa dòng và đánh dấu đang xử lý (Transaction siêu ngắn)
+     */
     @Transactional
     public List<OutboxEvent> claimAndMarkProcessing() {
         LocalDateTime now = LocalDateTime.now();
@@ -32,9 +36,14 @@ public class OutboxProcessor {
             event.setStatus(OutboxStatus.PROCESSING);
             event.setProcessingAt(now);
         }
+        // Nhờ cơ chế Dirty Checking của Hibernate, không cần gọi save(),
+        // JPA sẽ tự động cập nhật xuống DB khi hàm này kết thúc (Commit Transaction).
         return events;
     }
 
+    /**
+     * PHA 3 (Thành công): Chốt sổ giao dịch
+     */
     @Transactional
     public void markAsProcessed(Long eventId) {
         repository.findById(eventId).ifPresent(event -> {
@@ -43,12 +52,16 @@ public class OutboxProcessor {
         });
     }
 
+    /**
+     * PHA 3 (Thất bại): Tính toán dãn cách hoặc đánh dấu CHẾT
+     */
     @Transactional
     public void markAsFailed(Long eventId, String errorMessage) {
         repository.findById(eventId).ifPresent(event -> {
             int nextRetryCount = event.getRetryCount() + 1;
             event.setLastError(errorMessage);
 
+            // LẤY ĐÚNG CHÍNH SÁCH DỰA TRÊN LOẠI SỰ KIỆN
             RetryPolicy policy = policyFactory.getPolicy(event.getEventType());
 
             if (policy.shouldRetry(nextRetryCount)) {
