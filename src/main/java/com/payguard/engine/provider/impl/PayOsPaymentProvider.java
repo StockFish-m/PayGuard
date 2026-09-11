@@ -4,12 +4,13 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.payguard.engine.config.PayOsProperties;
-import com.payguard.engine.dto.PayOsResponseDTO;
-import com.payguard.engine.dto.PayOsTransactionDTO;
+import com.payguard.engine.entity.Transaction;
+import com.payguard.engine.enums.TransactionStatus;
 import com.payguard.engine.provider.PaymentProvider;
 import com.payguard.engine.provider.dto.PaymentRequest;
 import com.payguard.engine.provider.dto.PaymentResponse;
 import com.payguard.engine.provider.dto.ReconciliationTransactionDTO;
+import com.payguard.engine.repository.TransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -20,22 +21,32 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class PayOsPaymentProvider implements PaymentProvider {
 
     private static final Logger log = LoggerFactory.getLogger(PayOsPaymentProvider.class);
 
+    // PayOS giới hạn orderCode tối đa là 2^53 - 1 (Number.MAX_SAFE_INTEGER trong Javascript)
+    private static final long MAX_PAYOS_ORDER_CODE = 9007199254740991L;
+    // Mốc thời gian Custom Epoch: 2026-01-01T00:00:00Z (giúp số mili-giây nhỏ, vừa vặn trong 53-bit)
+    private static final long CUSTOM_EPOCH = 1767225600000L;
+    private static final AtomicLong SEQUENCE = new AtomicLong(0);
+
     private final RestClient payOsRestClient;
     private final PayOsProperties payOsProperties;
     private final ObjectMapper objectMapper;
+    private final TransactionRepository transactionRepository;
 
     public PayOsPaymentProvider(RestClient payOsRestClient,
                                PayOsProperties payOsProperties,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               TransactionRepository transactionRepository) {
         this.payOsRestClient = payOsRestClient;
         this.payOsProperties = payOsProperties;
         this.objectMapper = objectMapper;
+        this.transactionRepository = transactionRepository;
     }
 
     @Override
@@ -142,51 +153,88 @@ public class PayOsPaymentProvider implements PaymentProvider {
     }
 
     @Override
-    public List<ReconciliationTransactionDTO> fetchReconciliationTransactions() {
-        log.info("==> [PayOS] Fetching live reconciliation transactions via RestClient...");
-
+    public ReconciliationTransactionDTO fetchTransaction(String orderCodeStr) {
+        long orderCode = extractOrderCode(orderCodeStr);
         try {
-            PayOsResponseDTO response = payOsRestClient.get()
-                    .uri("/v2/payment-requests")
+            JsonNode root = payOsRestClient.get()
+                    .uri("/v2/payment-requests/{orderCode}", orderCode)
                     .retrieve()
-                    .body(PayOsResponseDTO.class);
+                    .body(JsonNode.class);
 
-            if (response == null || !"00".equals(response.getCode()) || response.getData() == null) {
-                log.error("==> [PayOS] Failed to fetch reconciliation data or API returned error: {}",
-                        response != null ? response.getDesc() : "null response");
-                return Collections.emptyList();
+            if (root == null || !"00".equals(root.path("code").asText())) {
+                log.warn("==> [PayOS] Order code {} not found or returned error: {}",
+                        orderCode, root != null ? root.path("desc").asText() : "null");
+                return null;
             }
 
-            List<PayOsTransactionDTO> payOsTransactions = response.getData();
-            log.info("==> [PayOS] Received {} transactions from PayOS", payOsTransactions.size());
+            JsonNode data = root.path("data");
+            String status = data.path("status").asText();
+            long amount = data.path("amount").asLong();
 
-            List<ReconciliationTransactionDTO> result = new ArrayList<>();
-            for (PayOsTransactionDTO txn : payOsTransactions) {
-                String orderCode = "TXN-00" + txn.getOrderCode();
-                result.add(new ReconciliationTransactionDTO(orderCode, txn.getAmount(), txn.getStatus()));
-            }
-
-            return result;
+            return new ReconciliationTransactionDTO(orderCodeStr, amount, status);
 
         } catch (Exception e) {
-            log.error("==> [PayOS] Error while fetching reconciliation transactions: ", e);
-            return Collections.emptyList();
+            log.error("==> [PayOS] Error querying PayOS for orderCode {}: {}", orderCode, e.getMessage());
+            return null;
         }
     }
 
-    private long extractOrderCode(String transactionId) {
-        if (transactionId == null || transactionId.isBlank()) {
-            return System.currentTimeMillis();
+    @Override
+    public List<ReconciliationTransactionDTO> fetchReconciliationTransactions() {
+        // Bước 1: Chỉ lấy các đơn PENDING từ DB nội bộ của PayGuard để đi đối soát
+        List<Transaction> pendingTxns = transactionRepository.findByStatus(TransactionStatus.PENDING);
+
+        log.info("==> [PayOS] Starting reconciliation for {} PENDING transactions from DB", pendingTxns.size());
+        List<ReconciliationTransactionDTO> result = new ArrayList<>();
+
+        // Bước 2: Vòng lặp truy vấn trạng thái từng đơn từ PayOS API (GET /v2/payment-requests/{orderCode})
+        for (Transaction txn : pendingTxns) {
+            ReconciliationTransactionDTO dto = fetchTransaction(txn.getOrderCode());
+            if (dto != null) {
+                result.add(dto);
+            }
         }
-        String digits = transactionId.replaceAll("[^0-9]", "");
-        if (digits.isEmpty()) {
-            return Math.abs((long) transactionId.hashCode());
+
+        log.info("==> [PayOS] Reconciliation completed. Fetched {} valid transaction results from PayOS", result.size());
+        return result;
+    }
+
+    /**
+     * Bóc tách hoặc sinh orderCode số nguyên dương độc nhất <= 2^53 - 1.
+     * Tuyệt đối không dùng hashCode() để tránh sinh số âm và va chạm dữ liệu.
+     */
+    public long extractOrderCode(String transactionId) {
+        if (transactionId != null && !transactionId.isBlank()) {
+            String digits = transactionId.replaceAll("[^0-9]", "");
+            if (!digits.isEmpty()) {
+                try {
+                    long parsed = Long.parseLong(digits);
+                    if (parsed > 0 && parsed <= MAX_PAYOS_ORDER_CODE) {
+                        return parsed;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Nếu chuỗi số quá dài vượt quá Long.MAX_VALUE, chuyển sang bộ sinh độc nhất
+                }
+            }
         }
-        try {
-            return Long.parseLong(digits);
-        } catch (NumberFormatException e) {
-            return Math.abs((long) transactionId.hashCode());
+        // Fallback an toàn: Sử dụng thuật toán Snowflake 53-bit đảm bảo luôn > 0, duy nhất, không va chạm
+        return generateUniqueOrderCode();
+    }
+
+    /**
+     * Sinh mã số nguyên dương duy nhất theo kiến trúc Snowflake rút gọn trong phạm vi 53-bit.
+     * Cấu trúc: [41 bit timestamp tương đối] + [12 bit sequence (tối đa 4096 txns/ms)]
+     */
+    private synchronized long generateUniqueOrderCode() {
+        long currentMillis = System.currentTimeMillis();
+        long diff = currentMillis - CUSTOM_EPOCH;
+        if (diff < 0) {
+            diff = currentMillis;
         }
+
+        long seq = SEQUENCE.incrementAndGet() & 0xFFFL; // 12-bit (0 - 4095)
+        long code = ((diff << 12) | seq) % MAX_PAYOS_ORDER_CODE;
+        return code <= 0 ? 1 : code;
     }
 
     private String hmacSha256(String data, String key) throws Exception {

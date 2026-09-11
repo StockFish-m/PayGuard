@@ -28,4 +28,9 @@ public interface PaymentProvider {
      * Lấy danh sách giao dịch từ cổng thanh toán để chạy đối soát định kỳ.
      */
     List<ReconciliationTransactionDTO> fetchReconciliationTransactions();
+
+    /**
+     * Lấy thông tin chi tiết một giao dịch cụ thể từ cổng thanh toán theo mã đơn hàng.
+     */
+    ReconciliationTransactionDTO fetchTransaction(String orderCode);
 }
