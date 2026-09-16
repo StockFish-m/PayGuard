@@ -1,6 +1,7 @@
 package com.payguard.engine.config;
 
 import com.payguard.engine.config.anotation.Idempotent;
+import com.payguard.engine.exception.DuplicateRequestException;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -54,7 +55,7 @@ public class IdempotencyAspect {
 
         if (!isLockAcquired) {
             log.warn("==> [AOP Interceptor] Blocked concurrent duplicate request for key: {}", idempotencyKey);
-            throw new RuntimeException("Request is being processed, please do not click repeatedly!");
+            throw new DuplicateRequestException("Request is being processed, please do not click repeatedly!");
         }
 
         try {
