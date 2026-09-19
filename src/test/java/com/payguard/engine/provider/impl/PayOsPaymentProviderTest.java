@@ -3,6 +3,7 @@ package com.payguard.engine.provider.impl;
 import tools.jackson.databind.ObjectMapper;
 import com.payguard.engine.config.PayOsProperties;
 import com.payguard.engine.repository.TransactionRepository;
+import com.payguard.engine.util.PayGuardSecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ class PayOsPaymentProviderTest {
     private PayOsProperties properties;
     private ObjectMapper objectMapper;
     private TransactionRepository transactionRepository;
+    private PayGuardSecurityUtil securityUtil;
     private PayOsPaymentProvider provider;
 
     @BeforeEach
@@ -32,8 +34,9 @@ class PayOsPaymentProviderTest {
         properties.setApiKey("test-api-key");
         objectMapper = new ObjectMapper();
         transactionRepository = mock(TransactionRepository.class);
+        securityUtil = new PayGuardSecurityUtil();
 
-        provider = new PayOsPaymentProvider(restClient, properties, objectMapper, transactionRepository);
+        provider = new PayOsPaymentProvider(restClient, properties, objectMapper, transactionRepository, securityUtil);
     }
 
     @Test
@@ -84,5 +87,15 @@ class PayOsPaymentProviderTest {
     void verifyWebhookSignature_signatureMismatch() {
         String payload = "{\"data\":{\"orderCode\":12345,\"amount\":10000},\"signature\":\"wrong-sig\"}";
         assertFalse(provider.verifyWebhookSignature(payload, "wrong-sig"));
+    }
+
+    @Test
+    @DisplayName("verifyWebhookSignature should return true when signature matches using PayGuardSecurityUtil")
+    void verifyWebhookSignature_signatureMatch() {
+        String dataToHash = "amount=10000&orderCode=12345";
+        String validSig = securityUtil.signHmacSha256(dataToHash, "test-checksum-key");
+
+        String payload = "{\"data\":{\"orderCode\":12345,\"amount\":10000},\"signature\":\"" + validSig + "\"}";
+        assertTrue(provider.verifyWebhookSignature(payload, validSig));
     }
 }

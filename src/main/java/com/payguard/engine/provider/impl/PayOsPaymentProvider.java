@@ -11,15 +11,13 @@ import com.payguard.engine.provider.dto.PaymentRequest;
 import com.payguard.engine.provider.dto.PaymentResponse;
 import com.payguard.engine.provider.dto.ReconciliationTransactionDTO;
 import com.payguard.engine.repository.TransactionRepository;
+import com.payguard.engine.util.PayGuardSecurityUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -38,15 +36,18 @@ public class PayOsPaymentProvider implements PaymentProvider {
     private final PayOsProperties payOsProperties;
     private final ObjectMapper objectMapper;
     private final TransactionRepository transactionRepository;
+    private final PayGuardSecurityUtil payGuardSecurityUtil;
 
     public PayOsPaymentProvider(RestClient payOsRestClient,
-                               PayOsProperties payOsProperties,
-                               ObjectMapper objectMapper,
-                               TransactionRepository transactionRepository) {
+                                PayOsProperties payOsProperties,
+                                ObjectMapper objectMapper,
+                                TransactionRepository transactionRepository,
+                                PayGuardSecurityUtil payGuardSecurityUtil) {
         this.payOsRestClient = payOsRestClient;
         this.payOsProperties = payOsProperties;
         this.objectMapper = objectMapper;
         this.transactionRepository = transactionRepository;
+        this.payGuardSecurityUtil = payGuardSecurityUtil;
     }
 
     @Override
@@ -70,7 +71,7 @@ public class PayOsPaymentProvider implements PaymentProvider {
             // Chuỗi dữ liệu ký HMAC theo thứ tự alphabet: amount, cancelUrl, description, orderCode, returnUrl
             String dataToHash = String.format("amount=%d&cancelUrl=%s&description=%s&orderCode=%d&returnUrl=%s",
                     amount, cancelUrl, description, orderCode, returnUrl);
-            String signature = hmacSha256(dataToHash, payOsProperties.getChecksumKey());
+            String signature = payGuardSecurityUtil.signHmacSha256(dataToHash, payOsProperties.getChecksumKey());
 
             Map<String, Object> reqBody = new HashMap<>();
             reqBody.put("orderCode", orderCode);
@@ -142,7 +143,7 @@ public class PayOsPaymentProvider implements PaymentProvider {
             }
 
             String dataToHash = stringBuilder.toString();
-            String generatedSignature = hmacSha256(dataToHash, checksumKey);
+            String generatedSignature = payGuardSecurityUtil.signHmacSha256(dataToHash, checksumKey);
 
             return generatedSignature.equals(signatureToVerify);
 
@@ -235,22 +236,5 @@ public class PayOsPaymentProvider implements PaymentProvider {
         long seq = SEQUENCE.incrementAndGet() & 0xFFFL; // 12-bit (0 - 4095)
         long code = ((diff << 12) | seq) % MAX_PAYOS_ORDER_CODE;
         return code <= 0 ? 1 : code;
-    }
-
-    private String hmacSha256(String data, String key) throws Exception {
-        Mac sha256HMAC = Mac.getInstance("HmacSHA256");
-        SecretKeySpec secretKey = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        sha256HMAC.init(secretKey);
-
-        byte[] hashBytes = sha256HMAC.doFinal(data.getBytes(StandardCharsets.UTF_8));
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : hashBytes) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) {
-                hexString.append('0');
-            }
-            hexString.append(hex);
-        }
-        return hexString.toString();
     }
 }
