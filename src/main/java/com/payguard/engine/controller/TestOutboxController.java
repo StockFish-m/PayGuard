@@ -21,6 +21,7 @@ public class TestOutboxController {
     @PostMapping("/test/trigger-outbox")
     public String triggerEvent() {
         OutboxEvent event = new OutboxEvent();
+        event.setAppId("ASTRACINE");
         event.setAggregateType("PAYMENT");
         event.setAggregateId(UUID.randomUUID().toString());
         event.setEventType("PAYMENT_SUCCESS");

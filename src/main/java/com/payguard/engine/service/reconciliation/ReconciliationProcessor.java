@@ -71,6 +71,7 @@ public class ReconciliationProcessor {
 
                                 // Lưu vào bảng Outbox để hệ thống sau xử lý tiếp
                                 OutboxEvent event = new OutboxEvent();
+                                event.setAppId(txn.getAppId());
                                 event.setAggregateType("TRANSACTION");
                                 event.setAggregateId(orderCode);
                                 event.setEventType(TransactionEvent.PAYMENT_SUCCESS.name());
@@ -113,6 +114,7 @@ public class ReconciliationProcessor {
                                 txn.setStatus(newStatus);
                                 transactionRepository.save(txn);
                                 OutboxEvent event = new OutboxEvent();
+                                event.setAppId(txn.getAppId());
                                 event.setAggregateType("TRANSACTION");
                                 event.setAggregateId(orderCode);
                                 event.setEventType(TransactionEvent.PAYMENT_AMOUNT_MISMATCH.name());

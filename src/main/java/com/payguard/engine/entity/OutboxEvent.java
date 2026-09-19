@@ -20,6 +20,9 @@ public class OutboxEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "app_id", nullable = false, length = 50)
+    private String appId;
+
     @Column(nullable = false, length = 50)
     private String aggregateType; // e.g. "TRANSACTION"
 

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, String> {
@@ -14,4 +15,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
     List<Transaction> findByStatus(TransactionStatus status);
 
     List<Transaction> findByStatusIn(Collection<TransactionStatus> statuses);
+
+    Optional<Transaction> findByIdempotencyKey(String idempotencyKey);
 }

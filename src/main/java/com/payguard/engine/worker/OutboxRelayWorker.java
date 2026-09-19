@@ -2,6 +2,8 @@ package com.payguard.engine.worker;
 
 import com.payguard.engine.entity.OutboxEvent;
 import com.payguard.engine.processor.OutboxProcessor;
+import com.payguard.engine.util.PayGuardSecurityUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,13 +22,19 @@ public class OutboxRelayWorker {
 
     private final OutboxProcessor processor;
     private final RestClient restClient;
+    private final PayGuardSecurityUtil securityUtil;
 
     @Value("${payguard.downstream.webhook-url:http://localhost:8081/webhook}")
     private String webhookUrl;
+    // TODO: Tạm thời dùng key cố định. Sau này sẽ query từ bảng MerchantApp
+    @Value("${payguard.downstream.secret-key:AstraCine_SecretKey_123456789}")
+    private String downstreamSecretKey;
 
-    public OutboxRelayWorker(OutboxProcessor processor, RestClient outboxRestClient) {
+    public OutboxRelayWorker(OutboxProcessor processor, RestClient outboxRestClient,
+            PayGuardSecurityUtil securityUtil) {
         this.processor = processor;
         this.restClient = outboxRestClient;
+        this.securityUtil = securityUtil;
     }
 
     @Scheduled(fixedDelay = 5000)
@@ -44,12 +52,20 @@ public class OutboxRelayWorker {
         // phóng hoàn toàn)
         for (OutboxEvent event : events) {
             try {
+                // 2.1. Chuẩn bị chuỗi chữ ký (Payload đã được sắp xếp A-Z ở OutboxProcessor)
+                String payloadJson = event.getPayload();
+                String signature = securityUtil.signHmacSha256(payloadJson, downstreamSecretKey);
+
+                // Ghi log để debug (Che bớt chuỗi ký tự để tránh lộ trong log)
+                log.info("--> Signing Payload (Event {}): {}", event.getId(), signature.substring(0, 16) + "...");
+
                 restClient.post()
                         .uri(webhookUrl)
                         .header("Content-Type", "application/json")
                         .header("X-Event-ID", String.valueOf(event.getId())) // Header hỗ trợ đối tác chống trùng lặp
                                                                              // (Idempotency)
                         .header("X-Event-Type", event.getEventType())
+                        .header("X-PayGuard-Signature", signature) // <--- LÁ CHẮN ĐƯỢC KÍCH HOẠT!
                         .body(event.getPayload())
                         .retrieve()
                         .toBodilessEntity(); // Chỉ cần biết HTTP 2xx thành công, không cần parse body
