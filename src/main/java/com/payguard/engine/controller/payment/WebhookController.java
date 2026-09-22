@@ -2,7 +2,9 @@ package com.payguard.engine.controller.payment;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import com.payguard.engine.entity.Transaction;
 import com.payguard.engine.provider.PaymentProvider;
+import com.payguard.engine.repository.TransactionRepository;
 import com.payguard.engine.service.payment.PaymentWebhookService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,13 +24,16 @@ public class WebhookController {
     private final PaymentProvider paymentProvider;
     private final ObjectMapper objectMapper;
     private final PaymentWebhookService paymentWebhookService;
+    private final TransactionRepository transactionRepository;
 
     public WebhookController(PaymentProvider paymentProvider,
                              ObjectMapper objectMapper,
-                             PaymentWebhookService paymentWebhookService) {
+                             PaymentWebhookService paymentWebhookService,
+                             TransactionRepository transactionRepository) {
         this.paymentProvider = paymentProvider;
         this.objectMapper = objectMapper;
         this.paymentWebhookService = paymentWebhookService;
+        this.transactionRepository = transactionRepository;
     }
 
     @PostMapping("/webhook")
@@ -52,13 +57,22 @@ public class WebhookController {
             long payOsOrderCode = dataNode.path("orderCode").asLong();
             long payOsAmount = dataNode.path("amount").asLong();
             String payOsStatus = dataNode.path("status").asText(); // "PAID", "CANCELLED", "FAILED", "EXPIRED"
-            String dbOrderCode = "TXN-00" + payOsOrderCode; // Map số Long thành format orderCode nội bộ
+
+            Transaction dbTxn = transactionRepository
+                    .findByPayOsOrderCode(payOsOrderCode)
+                    .orElse(null);
+
+            if (dbTxn == null) {
+                log.error("==> [Webhook] Order with PayOS code {} not found in DB!", payOsOrderCode);
+                return ResponseEntity.ok("success"); // Vẫn trả 200 để PayOS không retry
+            }
 
             log.info("==> [Webhook] Valid signature! Processing order {} with status='{}', amount={}",
-                    dbOrderCode, payOsStatus, payOsAmount);
+                    dbTxn.getOrderCode(), payOsStatus, payOsAmount);
 
             // 3. Xử lý webhook theo luồng Real-time chuyên biệt (tách biệt hoàn toàn với batch ReconciliationProcessor)
-            paymentWebhookService.processWebhookPayment(dbOrderCode, payOsStatus, payOsAmount);
+            paymentWebhookService.processWebhookPayment(
+                    dbTxn.getOrderCode(), payOsStatus, payOsAmount);
 
             return ResponseEntity.ok("success");
 

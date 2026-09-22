@@ -45,7 +45,12 @@ class PaymentWebhookServiceTest {
     @Test
     @DisplayName("processWebhookPayment with status PAID and matching amount transitions to SUCCESS")
     void testPaid_MatchingAmount_Success() {
-        Transaction txn = new Transaction("TXN-00123", 50000L, TransactionStatus.PENDING, "ASTRACINE");
+        Transaction txn = Transaction.builder()
+                .orderCode("TXN-00123")
+                .amount(50000L)
+                .status(TransactionStatus.PENDING)
+                .appId("ASTRACINE")
+                .build();
         when(transactionRepository.findById("TXN-00123")).thenReturn(Optional.of(txn));
 
         OutboxEvent savedOutbox = new OutboxEvent();
@@ -71,7 +76,12 @@ class PaymentWebhookServiceTest {
     @Test
     @DisplayName("processWebhookPayment with status PAID and mismatched amount transitions to AMOUNT_MISMATCH")
     void testPaid_MismatchedAmount_AmountMismatch() {
-        Transaction txn = new Transaction("TXN-00123", 50000L, TransactionStatus.PENDING, "ASTRACINE");
+        Transaction txn = Transaction.builder()
+                .orderCode("TXN-00123")
+                .amount(50000L)
+                .status(TransactionStatus.PENDING)
+                .appId("ASTRACINE")
+                .build();
         when(transactionRepository.findById("TXN-00123")).thenReturn(Optional.of(txn));
 
         OutboxEvent savedOutbox = new OutboxEvent();
@@ -92,7 +102,12 @@ class PaymentWebhookServiceTest {
     @Test
     @DisplayName("processWebhookPayment with status CANCELLED transitions to FAILED")
     void testCancelled_TransitionsToFailed() {
-        Transaction txn = new Transaction("TXN-00123", 50000L, TransactionStatus.PENDING, "ASTRACINE");
+        Transaction txn = Transaction.builder()
+                .orderCode("TXN-00123")
+                .amount(50000L)
+                .status(TransactionStatus.PENDING)
+                .appId("ASTRACINE")
+                .build();
         when(transactionRepository.findById("TXN-00123")).thenReturn(Optional.of(txn));
 
         OutboxEvent savedOutbox = new OutboxEvent();
@@ -109,7 +124,12 @@ class PaymentWebhookServiceTest {
     @Test
     @DisplayName("processWebhookPayment ignores duplicate webhook when order is already SUCCESS")
     void testAlreadySuccess_IgnoredGracefully() {
-        Transaction txn = new Transaction("TXN-00123", 50000L, TransactionStatus.SUCCESS, "ASTRACINE");
+        Transaction txn = Transaction.builder()
+                .orderCode("TXN-00123")
+                .amount(50000L)
+                .status(TransactionStatus.SUCCESS)
+                .appId("ASTRACINE")
+                .build();
         when(transactionRepository.findById("TXN-00123")).thenReturn(Optional.of(txn));
 
         boolean result = webhookService.processWebhookPayment("TXN-00123", "PAID", 50000L);

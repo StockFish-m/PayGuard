@@ -1,4 +1,3 @@
-// === src/main/java/com/payguard/engine/entity/MerchantApp.java ===
 package com.payguard.engine.entity;
 
 import jakarta.persistence.Column;

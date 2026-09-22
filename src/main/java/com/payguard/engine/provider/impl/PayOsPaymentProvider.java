@@ -26,9 +26,11 @@ public class PayOsPaymentProvider implements PaymentProvider {
 
     private static final Logger log = LoggerFactory.getLogger(PayOsPaymentProvider.class);
 
-    // PayOS giới hạn orderCode tối đa là 2^53 - 1 (Number.MAX_SAFE_INTEGER trong Javascript)
+    // PayOS giới hạn orderCode tối đa là 2^53 - 1 (Number.MAX_SAFE_INTEGER trong
+    // Javascript)
     private static final long MAX_PAYOS_ORDER_CODE = 9007199254740991L;
-    // Mốc thời gian Custom Epoch: 2026-01-01T00:00:00Z (giúp số mili-giây nhỏ, vừa vặn trong 53-bit)
+    // Mốc thời gian Custom Epoch: 2026-01-01T00:00:00Z (giúp số mili-giây nhỏ, vừa
+    // vặn trong 53-bit)
     private static final long CUSTOM_EPOCH = 1767225600000L;
     private static final AtomicLong SEQUENCE = new AtomicLong(0);
 
@@ -39,10 +41,10 @@ public class PayOsPaymentProvider implements PaymentProvider {
     private final PayGuardSecurityUtil payGuardSecurityUtil;
 
     public PayOsPaymentProvider(RestClient payOsRestClient,
-                                PayOsProperties payOsProperties,
-                                ObjectMapper objectMapper,
-                                TransactionRepository transactionRepository,
-                                PayGuardSecurityUtil payGuardSecurityUtil) {
+            PayOsProperties payOsProperties,
+            ObjectMapper objectMapper,
+            TransactionRepository transactionRepository,
+            PayGuardSecurityUtil payGuardSecurityUtil) {
         this.payOsRestClient = payOsRestClient;
         this.payOsProperties = payOsProperties;
         this.objectMapper = objectMapper;
@@ -68,7 +70,8 @@ public class PayOsPaymentProvider implements PaymentProvider {
             String cancelUrl = request.cancelUrl() != null ? request.cancelUrl() : "";
             String returnUrl = request.returnUrl() != null ? request.returnUrl() : "";
 
-            // Chuỗi dữ liệu ký HMAC theo thứ tự alphabet: amount, cancelUrl, description, orderCode, returnUrl
+            // Chuỗi dữ liệu ký HMAC theo thứ tự alphabet: amount, cancelUrl, description,
+            // orderCode, returnUrl
             String dataToHash = String.format("amount=%d&cancelUrl=%s&description=%s&orderCode=%d&returnUrl=%s",
                     amount, cancelUrl, description, orderCode, returnUrl);
             String signature = payGuardSecurityUtil.signHmacSha256(dataToHash, payOsProperties.getChecksumKey());
@@ -129,7 +132,8 @@ public class PayOsPaymentProvider implements PaymentProvider {
             }
 
             // Chuyển JsonNode thành Map và sắp xếp Key A-Z bằng TreeMap
-            Map<String, Object> dataMap = objectMapper.convertValue(dataNode, new TypeReference<>() {});
+            Map<String, Object> dataMap = objectMapper.convertValue(dataNode, new TypeReference<>() {
+            });
             TreeMap<String, Object> sortedMap = new TreeMap<>(dataMap);
 
             StringBuilder stringBuilder = new StringBuilder();
@@ -188,7 +192,8 @@ public class PayOsPaymentProvider implements PaymentProvider {
         log.info("==> [PayOS] Starting reconciliation for {} PENDING transactions from DB", pendingTxns.size());
         List<ReconciliationTransactionDTO> result = new ArrayList<>();
 
-        // Bước 2: Vòng lặp truy vấn trạng thái từng đơn từ PayOS API (GET /v2/payment-requests/{orderCode})
+        // Bước 2: Vòng lặp truy vấn trạng thái từng đơn từ PayOS API (GET
+        // /v2/payment-requests/{orderCode})
         for (Transaction txn : pendingTxns) {
             ReconciliationTransactionDTO dto = fetchTransaction(txn.getOrderCode());
             if (dto != null) {
@@ -196,7 +201,8 @@ public class PayOsPaymentProvider implements PaymentProvider {
             }
         }
 
-        log.info("==> [PayOS] Reconciliation completed. Fetched {} valid transaction results from PayOS", result.size());
+        log.info("==> [PayOS] Reconciliation completed. Fetched {} valid transaction results from PayOS",
+                result.size());
         return result;
     }
 
@@ -218,13 +224,16 @@ public class PayOsPaymentProvider implements PaymentProvider {
                 }
             }
         }
-        // Fallback an toàn: Sử dụng thuật toán Snowflake 53-bit đảm bảo luôn > 0, duy nhất, không va chạm
+        // Fallback an toàn: Sử dụng thuật toán Snowflake 53-bit đảm bảo luôn > 0, duy
+        // nhất, không va chạm
         return generateUniqueOrderCode();
     }
 
     /**
-     * Sinh mã số nguyên dương duy nhất theo kiến trúc Snowflake rút gọn trong phạm vi 53-bit.
-     * Cấu trúc: [41 bit timestamp tương đối] + [12 bit sequence (tối đa 4096 txns/ms)]
+     * Sinh mã số nguyên dương duy nhất theo kiến trúc Snowflake rút gọn trong phạm
+     * vi 53-bit.
+     * Cấu trúc: [41 bit timestamp tương đối] + [12 bit sequence (tối đa 4096
+     * txns/ms)]
      */
     private synchronized long generateUniqueOrderCode() {
         long currentMillis = System.currentTimeMillis();

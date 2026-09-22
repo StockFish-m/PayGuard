@@ -18,7 +18,7 @@ public class IdempotencyController {
      * API Thanh toán thực tế của hệ thống
      * Chỉ cần cắm nhãn @Idempotent, mọi bài toán Concurrency biến mất!
      */
-    @PostMapping("/checkout")
+    @PostMapping("/demo-checkout")
     @Idempotent(leaseTime = 15) // Tự động bảo vệ trong 15 giây
     public ResponseEntity<String> checkout() throws InterruptedException {
         log.info("==> [Controller] Processing payment and generating movie ticket (Takes 3 seconds)...");

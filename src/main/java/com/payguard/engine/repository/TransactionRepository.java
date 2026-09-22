@@ -16,5 +16,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
 
     List<Transaction> findByStatusIn(Collection<TransactionStatus> statuses);
 
+    // Idempotency check
     Optional<Transaction> findByIdempotencyKey(String idempotencyKey);
+
+    // Webhook dùng cái này để map orderCode số từ PayOS về transaction nội bộ
+    Optional<Transaction> findByPayOsOrderCode(Long payOsOrderCode);
 }
