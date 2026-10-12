@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
@@ -29,21 +28,19 @@ public class CheckoutService {
     private final ObjectMapper objectMapper;
 
     public CheckoutService(TransactionRepository transactionRepository,
-                           PaymentProvider paymentProvider,
-                           ObjectMapper objectMapper) {
+            PaymentProvider paymentProvider,
+            ObjectMapper objectMapper) {
         this.transactionRepository = transactionRepository;
         this.paymentProvider = paymentProvider;
         this.objectMapper = objectMapper;
     }
 
-    @Transactional
     public CheckoutResponse processCheckout(CheckoutRequest request,
-                                            String appId,
-                                            String idempotencyKey) {
+            String appId,
+            String idempotencyKey) {
 
         // ── PHÒNG THỦ 1: Idempotency check trong DB ──────────────────────────
-        Optional<Transaction> existingTxn =
-                transactionRepository.findByIdempotencyKey(idempotencyKey);
+        Optional<Transaction> existingTxn = transactionRepository.findByIdempotencyKey(idempotencyKey);
         if (existingTxn.isPresent()) {
             log.info("==> [Checkout] Idempotency Hit! Returning cached response for key: {}",
                     idempotencyKey);
@@ -59,7 +56,8 @@ public class CheckoutService {
 
         // ── SINH ORDER CODE ───────────────────────────────────────────────────
         // Dùng Snowflake từ PaymentProvider — đảm bảo unique, không trùng, đúng 53-bit
-        // PaymentRequest với transactionId=null sẽ trigger fallback Snowflake trong extractOrderCode()
+        // PaymentRequest với transactionId=null sẽ trigger fallback Snowflake trong
+        // extractOrderCode()
         long payOsOrderCode = ((PayOsPaymentProvider) paymentProvider).extractOrderCode(null);
 
         String dbOrderCode = "TXN-" + payOsOrderCode; // VD: TXN-1749123456789012
@@ -104,8 +102,7 @@ public class CheckoutService {
                 BigDecimal.valueOf(request.amount()),
                 request.description(),
                 request.returnUrl(),
-                request.cancelUrl()
-        );
+                request.cancelUrl());
 
         PaymentResponse providerRes;
         try {
@@ -122,8 +119,7 @@ public class CheckoutService {
         CheckoutResponse response = new CheckoutResponse(
                 dbOrderCode,
                 providerRes.checkoutUrl(),
-                providerRes.qrCodeString()
-        );
+                providerRes.qrCodeString());
 
         try {
             newTxn.setResponseBody(objectMapper.writeValueAsString(response));
