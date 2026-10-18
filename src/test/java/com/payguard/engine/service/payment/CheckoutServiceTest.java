@@ -4,9 +4,10 @@ import com.payguard.engine.dto.CheckoutRequest;
 import com.payguard.engine.dto.CheckoutResponse;
 import com.payguard.engine.entity.Transaction;
 import com.payguard.engine.enums.TransactionStatus;
+import com.payguard.engine.provider.PaymentProvider;
 import com.payguard.engine.provider.dto.PaymentRequest;
 import com.payguard.engine.provider.dto.PaymentResponse;
-import com.payguard.engine.provider.impl.PayOsPaymentProvider;
+import com.payguard.engine.provider.dto.ReconciliationTransactionDTO;
 import com.payguard.engine.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,9 +17,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,7 +34,10 @@ class CheckoutServiceTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private PayOsPaymentProvider paymentProvider;
+    private PaymentProvider paymentProvider;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     private ObjectMapper objectMapper;
     private CheckoutService checkoutService;
@@ -39,7 +45,13 @@ class CheckoutServiceTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        checkoutService = new CheckoutService(transactionRepository, paymentProvider, objectMapper);
+        checkoutService = new CheckoutService(transactionRepository, paymentProvider, objectMapper, transactionTemplate);
+
+        lenient().doAnswer(invocation -> {
+            Consumer<org.springframework.transaction.TransactionStatus> action = invocation.getArgument(0);
+            action.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
     }
 
     @Test
@@ -79,7 +91,7 @@ class CheckoutServiceTest {
         long payOsOrderCode = 20260922123456L;
 
         when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
-        when(paymentProvider.extractOrderCode(null)).thenReturn(payOsOrderCode);
+        when(paymentProvider.generateOrderCode()).thenReturn(payOsOrderCode);
 
         PaymentResponse mockProviderResponse = new PaymentResponse("PROVIDER-001", "https://checkout.payos.vn/url", "qr-code-data");
         when(paymentProvider.createPaymentLink(any(PaymentRequest.class))).thenReturn(mockProviderResponse);
@@ -113,7 +125,7 @@ class CheckoutServiceTest {
         long payOsOrderCode = 9999999L;
 
         when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
-        when(paymentProvider.extractOrderCode(null)).thenReturn(payOsOrderCode);
+        when(paymentProvider.generateOrderCode()).thenReturn(payOsOrderCode);
         when(paymentProvider.createPaymentLink(any())).thenThrow(new RuntimeException("Gateway unavailable"));
 
         CheckoutRequest request = new CheckoutRequest(100000L, "Fail Order", "https://return", "https://cancel");
@@ -152,9 +164,9 @@ class CheckoutServiceTest {
                 .thenReturn(Optional.empty()) // First check: not found yet
                 .thenReturn(Optional.of(savedInParallel)); // Race fallback: found parallel record
 
-        when(paymentProvider.extractOrderCode(null)).thenReturn(payOsOrderCode);
-        when(transactionRepository.save(any(Transaction.class)))
-                .thenThrow(new DataIntegrityViolationException("Duplicate key idempotency_key"));
+        when(paymentProvider.generateOrderCode()).thenReturn(payOsOrderCode);
+        doThrow(new DataIntegrityViolationException("Duplicate key idempotency_key"))
+                .when(transactionRepository).save(any(Transaction.class));
 
         CheckoutRequest request = new CheckoutRequest(50000L, "Race Order", "https://return", "https://cancel");
         CheckoutResponse response = checkoutService.processCheckout(request, "ASTRACINE", idempotencyKey);
@@ -162,5 +174,66 @@ class CheckoutServiceTest {
         assertEquals("TXN-8888888", response.orderCode());
         assertEquals("https://checkout.payos.vn/race", response.checkoutUrl());
         verify(paymentProvider, never()).createPaymentLink(any());
+    }
+
+    @Test
+    @DisplayName("Self-healing: Orphaned PENDING transaction not found on PayOS is marked as FAILED")
+    void testOrphanedPendingTransaction_PayOsNotFound_MarksAsFailed() {
+        String idempotencyKey = "idem-orphaned-1";
+        long payOsOrderCode = 55555L;
+
+        Transaction orphanedTxn = Transaction.builder()
+                .orderCode("TXN-55555")
+                .payOsOrderCode(payOsOrderCode)
+                .amount(50000L)
+                .status(TransactionStatus.PENDING)
+                .appId("ASTRACINE")
+                .idempotencyKey(idempotencyKey)
+                .responseBody(null) // Crash occurred before response was saved
+                .build();
+
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(orphanedTxn));
+        when(paymentProvider.fetchTransaction("55555")).thenReturn(null); // PayOS never received order
+
+        CheckoutRequest request = new CheckoutRequest(50000L, "Orphaned Order", "https://return", "https://cancel");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
+                checkoutService.processCheckout(request, "ASTRACINE", idempotencyKey)
+        );
+
+        assertTrue(ex.getMessage().contains("Giao dịch trước đó bị gián đoạn"));
+        assertEquals(TransactionStatus.FAILED, orphanedTxn.getStatus());
+        verify(transactionRepository).save(orphanedTxn);
+    }
+
+    @Test
+    @DisplayName("Self-healing: Orphaned PENDING transaction already PAID on PayOS is marked as SUCCESS and returns response")
+    void testOrphanedPendingTransaction_PayOsPaid_MarksAsSuccessAndReturnsResponse() {
+        String idempotencyKey = "idem-orphaned-2";
+        long payOsOrderCode = 66666L;
+
+        Transaction orphanedTxn = Transaction.builder()
+                .orderCode("TXN-66666")
+                .payOsOrderCode(payOsOrderCode)
+                .amount(100000L)
+                .status(TransactionStatus.PENDING)
+                .appId("ASTRACINE")
+                .idempotencyKey(idempotencyKey)
+                .responseBody(null)
+                .build();
+
+        when(transactionRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.of(orphanedTxn));
+        when(paymentProvider.fetchTransaction("66666"))
+                .thenReturn(new ReconciliationTransactionDTO("TXN-66666", 100000L, "PAID"));
+
+        CheckoutRequest request = new CheckoutRequest(100000L, "Paid Order", "https://return", "https://cancel");
+
+        CheckoutResponse response = checkoutService.processCheckout(request, "ASTRACINE", idempotencyKey);
+
+        assertNotNull(response);
+        assertEquals("TXN-66666", response.orderCode());
+        assertNull(response.checkoutUrl());
+        assertEquals(TransactionStatus.SUCCESS, orphanedTxn.getStatus());
+        verify(transactionRepository).save(orphanedTxn);
     }
 }

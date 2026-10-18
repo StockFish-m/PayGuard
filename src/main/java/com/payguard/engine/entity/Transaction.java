@@ -8,8 +8,6 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 @Entity
 @Table(name = "transactions", indexes = {
@@ -58,5 +56,22 @@ public class Transaction {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public Transaction() {
+    }
+
+    public Transaction(String orderCode, Long payOsOrderCode, Long amount, TransactionStatus status,
+                       String appId, String idempotencyKey, String responseBody,
+                       LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.orderCode = orderCode;
+        this.payOsOrderCode = payOsOrderCode;
+        this.amount = amount;
+        this.status = status;
+        this.appId = appId;
+        this.idempotencyKey = idempotencyKey;
+        this.responseBody = responseBody;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
     }
 }

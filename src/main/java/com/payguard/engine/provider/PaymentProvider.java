@@ -33,4 +33,9 @@ public interface PaymentProvider {
      * Lấy thông tin chi tiết một giao dịch cụ thể từ cổng thanh toán theo mã đơn hàng.
      */
     ReconciliationTransactionDTO fetchTransaction(String orderCode);
+
+    /**
+     * Sinh mã đơn hàng số nguyên độc nhất, an toàn cho cổng thanh toán (53-bit cho PayOS).
+     */
+    long generateOrderCode();
 }

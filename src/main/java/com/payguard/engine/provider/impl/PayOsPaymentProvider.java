@@ -229,6 +229,11 @@ public class PayOsPaymentProvider implements PaymentProvider {
         return generateUniqueOrderCode();
     }
 
+    @Override
+    public long generateOrderCode() {
+        return generateUniqueOrderCode();
+    }
+
     /**
      * Sinh mã số nguyên dương duy nhất theo kiến trúc Snowflake rút gọn trong phạm
      * vi 53-bit.
